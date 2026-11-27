@@ -50,7 +50,13 @@ type Progress struct {
 
 func (a *App) Version() string { return AppVersion }
 
-func (a *App) ListDiscords() []DiscordInstall { return FindDiscords() }
+func (a *App) ListDiscords() []DiscordInstall {
+	list := FindDiscords()
+	for i := range list {
+		list[i].Icon = discordIconDataURL(list[i])
+	}
+	return list
+}
 
 func (a *App) CheckRequirements() []Requirement { return CheckRequirements() }
 

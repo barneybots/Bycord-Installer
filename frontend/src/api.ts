@@ -12,6 +12,7 @@ export interface DiscordInstall {
     mod: string;
     modPath: string;
     supported: boolean;
+    icon: string;
 }
 
 export interface Requirement {
@@ -64,10 +65,10 @@ export const inWails = Boolean(w.go?.main?.App);
 const go: GoApp | null = inWails ? w.go.main.App : null;
 
 const sample: DiscordInstall[] = [
-    { branch: "stable", name: "Discord", path: "%LOCALAPPDATA%\\Discord", version: "1.0.9270", state: "other", mod: "Equicord", modPath: "", supported: true },
-    { branch: "canary", name: "Discord Canary", path: "%LOCALAPPDATA%\\DiscordCanary", version: "1.0.812", state: "clean", mod: "", modPath: "", supported: true },
-    { branch: "development", name: "Discord Development", path: "%LOCALAPPDATA%\\DiscordDevelopment", version: "1.0.1039", state: "bycord", mod: "Bycord", modPath: "C:\\Users\\voce\\AppData\\Roaming\\Bycord\\dist\\patcher.js", supported: true },
-    { branch: "phoenix", name: "Discord Phoenix", path: "%LOCALAPPDATA%\\DiscordPhoenix", version: "", state: "unsupported", mod: "", modPath: "", supported: false },
+    { branch: "stable", name: "Discord", path: "%LOCALAPPDATA%\\Discord", version: "1.0.9270", state: "other", mod: "Equicord", modPath: "", supported: true, icon: "" },
+    { branch: "canary", name: "Discord Canary", path: "%LOCALAPPDATA%\\DiscordCanary", version: "1.0.812", state: "clean", mod: "", modPath: "", supported: true, icon: "" },
+    { branch: "development", name: "Discord Development", path: "%LOCALAPPDATA%\\DiscordDevelopment", version: "1.0.1039", state: "bycord", mod: "Bycord", modPath: "C:\\Users\\voce\\AppData\\Roaming\\Bycord\\dist\\patcher.js", supported: true, icon: "" },
+    { branch: "phoenix", name: "Discord Phoenix", path: "%LOCALAPPDATA%\\DiscordPhoenix", version: "", state: "unsupported", mod: "", modPath: "", supported: false, icon: "" },
 ];
 
 const sampleSteps: Record<OpKind, string[]> = {

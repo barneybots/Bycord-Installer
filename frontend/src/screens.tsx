@@ -89,6 +89,12 @@ export function Welcome({ version, onStart }: { version: string; onStart: () => 
 
 const BRANCH_GLYPH: Record<string, string> = { stable: "S", ptb: "P", canary: "C", development: "D", phoenix: "Φ" };
 
+/* Ícone da própria instalação do Discord; se não der para ler, mostra a letra. */
+function BranchIcon({ install }: { install: DiscordInstall; }) {
+    if (install.icon) return <img className="branch-icon" src={install.icon} alt="" draggable={false} />;
+    return <span className={`glyph glyph-${install.branch}`}>{BRANCH_GLYPH[install.branch] ?? "D"}</span>;
+}
+
 function stateBadge(d: DiscordInstall) {
     if (d.state === "bycord") return <Badge tone="accent">Com Bycord</Badge>;
     if (d.state === "other") return <Badge tone="warn">Com {d.mod}</Badge>;
@@ -137,7 +143,7 @@ export function ChooseDiscord({ discords, branch, onSelect, replaceOther, onRepl
                             whileHover={d.supported ? { y: -1 } : undefined}
                         >
                             {active && <motion.span layoutId="discord-ring" className="card-ring" transition={spring} />}
-                            <span className={`glyph glyph-${d.branch}`}>{BRANCH_GLYPH[d.branch] ?? "D"}</span>
+                            <BranchIcon install={d} />
                             <span className="card-main">
                                 <span className="card-title">{d.name}</span>
                                 <span className="card-sub">
@@ -468,7 +474,7 @@ export function Manage({ target, onBack, onReinstall, onRepair, onUpdate, onUnin
             <Heading title="Gerenciar o Bycord" sub="Esse Discord já está com o Bycord." />
 
             <motion.div className="manage-head" variants={item}>
-                <span className={`glyph glyph-${target.branch}`}>{BRANCH_GLYPH[target.branch] ?? "D"}</span>
+                <BranchIcon install={target} />
                 <span className="card-main">
                     <span className="card-title">{target.name} <Badge tone="accent">Com Bycord</Badge></span>
                     <code className="card-sub mono">{target.modPath || target.path}</code>

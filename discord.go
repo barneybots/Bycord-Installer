@@ -23,6 +23,7 @@ type DiscordInstall struct {
 	Mod       string `json:"mod"`       // Bycord, Equicord, Vencord ou outro, quando há patch
 	ModPath   string `json:"modPath"`   // caminho do patcher.js para onde o patch aponta
 	Supported bool   `json:"supported"` // false para o Phoenix
+	Icon      string `json:"icon"`      // ícone da própria instalação, em data URL ("" se não deu para ler)
 }
 
 var branches = []struct{ dir, branch, name string }{

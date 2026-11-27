@@ -879,6 +879,23 @@ code,
     --tint: #fb923c;
 }
 
+.branch-icon {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
+    transition: transform 0.25s var(--ease);
+}
+
+.card:hover:not(:disabled) .branch-icon {
+    transform: scale(1.06) rotate(-4deg);
+}
+
+.card:disabled .branch-icon {
+    filter: grayscale(0.6);
+}
+
 .radio {
     width: 18px;
     height: 18px;

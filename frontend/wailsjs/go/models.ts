@@ -9,6 +9,7 @@ export namespace main {
 	    mod: string;
 	    modPath: string;
 	    supported: boolean;
+	    icon: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new DiscordInstall(source);
@@ -24,6 +25,7 @@ export namespace main {
 	        this.mod = source["mod"];
 	        this.modPath = source["modPath"];
 	        this.supported = source["supported"];
+	        this.icon = source["icon"];
 	    }
 	}
 	export class InstallOptions {

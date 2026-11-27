@@ -104,6 +104,17 @@ func TestOnlyChosenDiscordIsTouched(t *testing.T) {
 	same("Discord", beforeStable, snapshot(stable))
 }
 
+// Só lê: confere que dá para tirar o ícone de cada Discord instalado.
+func TestDiscordIconsReadOnly(t *testing.T) {
+	for _, d := range FindDiscords() {
+		url := discordIconDataURL(d)
+		t.Logf("%-20s ícone de %s: %d bytes", d.Name, iconSource(d), len(url))
+		if url == "" {
+			t.Errorf("não consegui ler o ícone do %s", d.Name)
+		}
+	}
+}
+
 // Só lê: mostra quais processos cada instalação real fecharia. Não fecha nada.
 func TestProcessesPerInstallReadOnly(t *testing.T) {
 	for _, d := range FindDiscords() {
