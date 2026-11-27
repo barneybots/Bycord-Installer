@@ -2,7 +2,7 @@
 
 Instalador do [Bycord](https://github.com/barneybots/Bycord), um client mod gratuito baseado no Vencord.
 
-> 🚧 **Versão 0.2.** O modo **Rápido** funciona de verdade: instala, repara, atualiza e desinstala. O modo **Completo** ainda é só demonstração.
+> 🚧 **Versão 0.3.** O modo **Rápido** funciona de verdade: instala, repara, atualiza e desinstala. O modo **Completo** ainda é só demonstração.
 
 ## O que ele faz no seu PC
 
@@ -19,7 +19,7 @@ Instalador do [Bycord](https://github.com/barneybots/Bycord), um client mod grat
 
 ## Desenvolvimento
 
-Feito com [Wails](https://wails.io) (Go + React/TypeScript).
+Feito com [Wails](https://wails.io) (Go + React/TypeScript), animações com [Motion](https://motion.dev), ícones [Lucide](https://lucide.dev) e fonte [Geist](https://vercel.com/font).
 
 ```sh
 wails dev     # abre o instalador com recarga automática

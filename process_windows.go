@@ -26,15 +26,24 @@ func discordProcesses(root string) []uint32 {
 	}
 	defer windows.CloseHandle(snap)
 
-	prefix := strings.ToLower(filepath.Clean(root)) + `\`
 	var pids []uint32
 	entry := windows.ProcessEntry32{Size: uint32(unsafe.Sizeof(windows.ProcessEntry32{}))}
 	for err = windows.Process32First(snap, &entry); err == nil; err = windows.Process32Next(snap, &entry) {
-		if path := processPath(entry.ProcessID); path != "" && strings.HasPrefix(strings.ToLower(path), prefix) {
+		if isUnderRoot(processPath(entry.ProcessID), root) {
 			pids = append(pids, entry.ProcessID)
 		}
 	}
 	return pids
+}
+
+// isUnderRoot diz se um executável fica dentro da pasta da instalação.
+// A barra no fim impede que "Discord" case com "DiscordCanary" ou "DiscordPhoenix".
+func isUnderRoot(path, root string) bool {
+	if path == "" || root == "" {
+		return false
+	}
+	prefix := strings.ToLower(filepath.Clean(root)) + `\`
+	return strings.HasPrefix(strings.ToLower(filepath.Clean(path)), prefix)
 }
 
 func processPath(pid uint32) string {

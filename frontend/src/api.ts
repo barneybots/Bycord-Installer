@@ -37,6 +37,7 @@ export interface Progress {
     log: string;
     done: boolean;
     error: string;
+    steps: string[];
 }
 
 export type OpKind = "install" | "repair" | "update" | "uninstall";
@@ -80,22 +81,31 @@ const sampleSteps: Record<OpKind, string[]> = {
 function fakeOp(kind: OpKind, onProgress: (p: Progress) => void) {
     const labels = sampleSteps[kind];
     let i = 0;
+    const failAt = location.search.includes("erro") ? 2 : -1; // ?erro na prévia simula uma falha
     const timer = setInterval(() => {
         i++;
+        if (i === failAt + 1) {
+            clearInterval(timer);
+            onProgress({
+                step: failAt, total: labels.length, label: labels[failAt - 1], log: "Erro: (simulado na prévia)",
+                done: false, error: "Erro simulado na prévia: não consegui baixar o renderer.js (resposta 503).", steps: labels,
+            });
+            return;
+        }
         const done = i > labels.length;
         onProgress({
             step: Math.min(i, labels.length), total: labels.length,
             label: done ? "Pronto" : labels[i - 1],
             log: done ? "Tudo certo. (prévia: nada foi alterado)" : `${labels[i - 1]}...`,
-            done, error: "",
+            done, error: "", steps: labels,
         });
         if (done) clearInterval(timer);
-    }, 700);
+    }, 900);
     return () => clearInterval(timer);
 }
 
 export const api = {
-    version: () => go ? go.Version() : Promise.resolve("0.2.0"),
+    version: () => go ? go.Version() : Promise.resolve("0.3.0"),
     listDiscords: () => go ? go.ListDiscords() : Promise.resolve(sample),
     checkRequirements: () => go ? go.CheckRequirements() : Promise.resolve<Requirement[]>([
         { name: "Git", found: true, version: "2.56.0", link: "https://git-scm.com/download/win" },

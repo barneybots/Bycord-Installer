@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-const AppVersion = "0.2.0"
+const AppVersion = "0.3.0"
 
 // App é o que a interface enxerga do Go.
 type App struct {
@@ -38,12 +39,13 @@ type InstallOptions struct {
 
 // Progress é enviado para a interface durante uma operação.
 type Progress struct {
-	Step  int    `json:"step"`
-	Total int    `json:"total"`
-	Label string `json:"label"`
-	Log   string `json:"log"`
-	Done  bool   `json:"done"`
-	Error string `json:"error"`
+	Step  int      `json:"step"`
+	Total int      `json:"total"`
+	Label string   `json:"label"`
+	Log   string   `json:"log"`
+	Done  bool     `json:"done"`
+	Error string   `json:"error"`
+	Steps []string `json:"steps"` // nomes de todas as etapas, para a interface montar a lista
 }
 
 func (a *App) Version() string { return AppVersion }
@@ -120,17 +122,21 @@ func (a *App) run(steps []step) {
 		defer a.busy.Unlock()
 
 		total := len(steps)
+		labels := make([]string, total)
+		for i, s := range steps {
+			labels[i] = s.label
+		}
 		for i, s := range steps {
 			emit := func(line string) {
-				runtime.EventsEmit(a.ctx, "op:progress", Progress{Step: i + 1, Total: total, Label: s.label, Log: line})
+				runtime.EventsEmit(a.ctx, "op:progress", Progress{Step: i + 1, Total: total, Label: s.label, Log: line, Steps: labels})
 			}
 			emit(s.label + "...")
 			if err := s.run(emit); err != nil {
-				runtime.EventsEmit(a.ctx, "op:progress", Progress{Step: i + 1, Total: total, Label: s.label, Log: "Erro: " + err.Error(), Error: err.Error()})
+				runtime.EventsEmit(a.ctx, "op:progress", Progress{Step: i + 1, Total: total, Label: s.label, Log: "Erro: " + err.Error(), Error: err.Error(), Steps: labels})
 				return
 			}
 		}
-		runtime.EventsEmit(a.ctx, "op:progress", Progress{Step: total, Total: total, Label: "Pronto", Log: "Tudo certo.", Done: true})
+		runtime.EventsEmit(a.ctx, "op:progress", Progress{Step: total, Total: total, Label: "Pronto", Log: "Tudo certo.", Done: true, Steps: labels})
 	}()
 }
 
@@ -215,11 +221,27 @@ func (a *App) Repair(branch string) {
 }
 
 // Update baixa a build mais nova do Bycord (modo Rápido).
+// Os arquivos ficam em %APPDATA%\Bycord\dist, que é o mesmo para todos os Discords com o Bycord no modo Rápido.
 func (a *App) Update(branch string) {
+	inst, err := findInstall(branch)
+	if err == nil && inst.State != "bycord" {
+		err = errors.New("esse Discord não está com o Bycord")
+	}
+	if err == nil && !samePath(inst.ModPath, quickPatcherPath()) {
+		err = errors.New("esse Bycord foi instalado pelo modo Completo; atualize pelo atualizador dentro do Discord")
+	}
+	if err != nil {
+		a.run([]step{{"Preparando", func(func(string)) error { return err }}})
+		return
+	}
 	a.run([]step{a.downloadStep(), {"Concluindo", func(log func(string)) error {
 		log("Reinicie o Discord para usar a versão nova.")
 		return nil
 	}}})
+}
+
+func samePath(a, b string) bool {
+	return strings.EqualFold(filepath.Clean(a), filepath.Clean(b))
 }
 
 // Uninstall devolve o Discord ao original. As configurações do Bycord ficam em %APPDATA%\Bycord.
