@@ -1160,7 +1160,8 @@ code,
     justify-self: center;
 }
 
-.ring svg {
+/* Só o anel gira, para o progresso começar no topo; os ícones do centro ficam retos. */
+.ring > svg {
     transform: rotate(-90deg);
 }
 
