@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -114,7 +115,7 @@ func patchState(resources string) (state, mod, modPath string) {
 
 	lower := strings.ToLower(modPath)
 	switch {
-	case strings.Contains(lower, "bycord"):
+	case isBycordPatcher(modPath) || strings.Contains(lower, "bycord"):
 		return "bycord", "Bycord", modPath
 	case strings.Contains(lower, "equicord"):
 		return "other", "Equicord", modPath
@@ -123,6 +124,15 @@ func patchState(resources string) (state, mod, modPath string) {
 	default:
 		return "other", "outro mod", modPath
 	}
+}
+
+// isBycordPatcher olha o conteúdo do patcher.js: no modo Completo a pasta pode ter qualquer nome.
+func isBycordPatcher(path string) bool {
+	if path == "" {
+		return false
+	}
+	b, err := os.ReadFile(path)
+	return err == nil && bytes.Contains(b, []byte("[Bycord] Starting up"))
 }
 
 func exists(path string) bool {

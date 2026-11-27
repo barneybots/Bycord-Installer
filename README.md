@@ -2,7 +2,15 @@
 
 Instalador do [Bycord](https://github.com/barneybots/Bycord), um client mod gratuito baseado no Vencord.
 
-> 🚧 **Versão 0.1: demonstração.** As telas e a detecção do Discord funcionam, mas a instalação ainda é só simulada: nada é baixado e o Discord não é alterado.
+> 🚧 **Versão 0.2.** O modo **Rápido** funciona de verdade: instala, repara, atualiza e desinstala. O modo **Completo** ainda é só demonstração.
+
+## O que ele faz no seu PC
+
+- Baixa `patcher.js`, `preload.js`, `renderer.js` e `renderer.css` do release `devbuild` para `%APPDATA%\Bycord\dist`.
+- Na versão mais nova do Discord escolhido (`app-*\resources`), guarda o `app.asar` original como `_app.asar` e cria um `app.asar` pequeno que carrega o Bycord.
+- Fecha só o Discord escolhido, e só depois de perguntar.
+- Se o Discord já tiver outro mod (Vencord, Equicord…), só troca depois de você marcar a confirmação. O `_app.asar` original é mantido.
+- Desinstalar devolve o `app.asar` original. As configurações ficam em `%APPDATA%\Bycord`.
 
 ## Modos
 

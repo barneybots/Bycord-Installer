@@ -10,12 +10,22 @@ export function DefaultRepoFolder():Promise<string>;
 
 export function Install(arg1:main.InstallOptions):Promise<void>;
 
+export function IsRunning(arg1:string):Promise<boolean>;
+
 export function ListDiscords():Promise<Array<main.DiscordInstall>>;
 
 export function Minimise():Promise<void>;
 
+export function OpenDiscord(arg1:string):Promise<string>;
+
 export function OpenURL(arg1:string):Promise<void>;
 
 export function Quit():Promise<void>;
+
+export function Repair(arg1:string):Promise<void>;
+
+export function Uninstall(arg1:string):Promise<void>;
+
+export function Update(arg1:string):Promise<void>;
 
 export function Version():Promise<string>;

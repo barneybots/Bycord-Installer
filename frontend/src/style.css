@@ -396,13 +396,22 @@ h2 {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    min-height: 0;
+    overflow-y: auto;
+    flex: 0 1 auto;
+    padding: 2px;
+    margin: -2px;
+}
+
+.list > * {
+    flex-shrink: 0;
 }
 
 .option {
     display: flex;
     align-items: center;
     gap: 14px;
-    padding: 14px 16px;
+    padding: 11px 16px;
     border-radius: var(--radius);
     background: var(--surface);
     border: 1px solid var(--border);
@@ -709,4 +718,109 @@ h2 {
         animation: none !important;
         transition: none !important;
     }
+}
+
+/* Confirmações, erros e extras */
+
+.btn.danger {
+    background: var(--danger);
+    color: #2a0707;
+}
+
+.btn.danger:hover {
+    background: #fb8f8f;
+}
+
+.notice.error {
+    background: rgba(248, 113, 113, 0.08);
+    border-color: rgba(248, 113, 113, 0.35);
+    user-select: text;
+}
+
+.notice.error strong {
+    color: var(--danger);
+}
+
+.check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    color: var(--text);
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.check input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+    margin: 0;
+}
+
+.actions-right {
+    display: flex;
+    gap: 8px;
+}
+
+.hint code {
+    font-family: "Cascadia Code", Consolas, monospace;
+    font-size: 12px;
+    user-select: text;
+}
+
+.overlay {
+    position: fixed;
+    inset: 40px 0 0;
+    background: rgba(9, 9, 11, 0.72);
+    display: grid;
+    place-items: center;
+    animation: fade 0.15s ease-out;
+}
+
+@keyframes fade {
+    from {
+        opacity: 0;
+    }
+}
+
+.dialog {
+    width: 420px;
+    padding: 22px;
+    border-radius: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    animation: enter 0.2s ease-out;
+}
+
+.dialog h3 {
+    margin: 0 0 6px;
+    font-size: 17px;
+}
+
+.dialog p {
+    margin: 0;
+    color: var(--text-2);
+    line-height: 1.5;
+}
+
+.dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 20px;
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 999px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
 }

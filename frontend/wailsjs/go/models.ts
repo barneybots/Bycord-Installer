@@ -30,6 +30,7 @@ export namespace main {
 	    branch: string;
 	    mode: string;
 	    folder: string;
+	    replaceOther: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new InstallOptions(source);
@@ -40,6 +41,7 @@ export namespace main {
 	        this.branch = source["branch"];
 	        this.mode = source["mode"];
 	        this.folder = source["folder"];
+	        this.replaceOther = source["replaceOther"];
 	    }
 	}
 	export class Requirement {

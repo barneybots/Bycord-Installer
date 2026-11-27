@@ -23,13 +23,23 @@ export interface Requirement {
 
 export type Mode = "rapido" | "completo";
 
+export interface InstallOptions {
+    branch: string;
+    mode: Mode;
+    folder: string;
+    replaceOther: boolean;
+}
+
 export interface Progress {
     step: number;
     total: number;
     label: string;
     log: string;
     done: boolean;
+    error: string;
 }
+
+export type OpKind = "install" | "repair" | "update" | "uninstall";
 
 type GoApp = {
     Version(): Promise<string>;
@@ -37,7 +47,12 @@ type GoApp = {
     CheckRequirements(): Promise<Requirement[]>;
     DefaultRepoFolder(): Promise<string>;
     ChooseFolder(): Promise<string>;
-    Install(opts: { branch: string; mode: Mode; folder: string; }): Promise<void>;
+    IsRunning(branch: string): Promise<boolean>;
+    OpenDiscord(branch: string): Promise<string>;
+    Install(opts: InstallOptions): Promise<void>;
+    Repair(branch: string): Promise<void>;
+    Update(branch: string): Promise<void>;
+    Uninstall(branch: string): Promise<void>;
     OpenURL(url: string): Promise<void>;
     Minimise(): Promise<void>;
     Quit(): Promise<void>;
@@ -50,12 +65,37 @@ const go: GoApp | null = inWails ? w.go.main.App : null;
 const sample: DiscordInstall[] = [
     { branch: "stable", name: "Discord", path: "%LOCALAPPDATA%\\Discord", version: "1.0.9270", state: "other", mod: "Equicord", modPath: "", supported: true },
     { branch: "canary", name: "Discord Canary", path: "%LOCALAPPDATA%\\DiscordCanary", version: "1.0.812", state: "clean", mod: "", modPath: "", supported: true },
-    { branch: "development", name: "Discord Development", path: "%LOCALAPPDATA%\\DiscordDevelopment", version: "1.0.1039", state: "bycord", mod: "Bycord", modPath: "", supported: true },
+    { branch: "development", name: "Discord Development", path: "%LOCALAPPDATA%\\DiscordDevelopment", version: "1.0.1039", state: "bycord", mod: "Bycord", modPath: "C:\\Users\\voce\\AppData\\Roaming\\Bycord\\dist\\patcher.js", supported: true },
     { branch: "phoenix", name: "Discord Phoenix", path: "%LOCALAPPDATA%\\DiscordPhoenix", version: "", state: "unsupported", mod: "", modPath: "", supported: false },
 ];
 
+const sampleSteps: Record<OpKind, string[]> = {
+    install: ["Fechando o Discord", "Baixando o Bycord", "Aplicando o patch", "Conferindo"],
+    repair: ["Fechando o Discord", "Aplicando o patch", "Conferindo"],
+    update: ["Baixando o Bycord", "Concluindo"],
+    uninstall: ["Fechando o Discord", "Removendo o patch", "Conferindo"],
+};
+
+// Simula uma operação no navegador.
+function fakeOp(kind: OpKind, onProgress: (p: Progress) => void) {
+    const labels = sampleSteps[kind];
+    let i = 0;
+    const timer = setInterval(() => {
+        i++;
+        const done = i > labels.length;
+        onProgress({
+            step: Math.min(i, labels.length), total: labels.length,
+            label: done ? "Pronto" : labels[i - 1],
+            log: done ? "Tudo certo. (prévia: nada foi alterado)" : `${labels[i - 1]}...`,
+            done, error: "",
+        });
+        if (done) clearInterval(timer);
+    }, 700);
+    return () => clearInterval(timer);
+}
+
 export const api = {
-    version: () => go ? go.Version() : Promise.resolve("0.1.0"),
+    version: () => go ? go.Version() : Promise.resolve("0.2.0"),
     listDiscords: () => go ? go.ListDiscords() : Promise.resolve(sample),
     checkRequirements: () => go ? go.CheckRequirements() : Promise.resolve<Requirement[]>([
         { name: "Git", found: true, version: "2.56.0", link: "https://git-scm.com/download/win" },
@@ -64,32 +104,21 @@ export const api = {
     ]),
     defaultRepoFolder: () => go ? go.DefaultRepoFolder() : Promise.resolve("C:\\Users\\voce\\Documents\\Bycord"),
     chooseFolder: () => go ? go.ChooseFolder() : Promise.resolve(""),
+    isRunning: (branch: string) => go ? go.IsRunning(branch) : Promise.resolve(branch === "canary"),
+    openDiscord: (branch: string) => go ? go.OpenDiscord(branch) : Promise.resolve(""),
     openURL: (url: string) => go ? go.OpenURL(url) : void window.open(url, "_blank"),
     minimise: () => go?.Minimise(),
     quit: () => go ? go.Quit() : undefined,
 
-    install(opts: { branch: string; mode: Mode; folder: string; }, onProgress: (p: Progress) => void) {
-        if (go) {
-            w.runtime.EventsOn("install:progress", onProgress);
-            void go.Install(opts);
-            return () => w.runtime.EventsOff("install:progress");
-        }
+    /** Roda uma operação e avisa o progresso. Devolve uma função para parar de ouvir. */
+    run(kind: OpKind, opts: InstallOptions, onProgress: (p: Progress) => void) {
+        if (!go) return fakeOp(kind, onProgress);
 
-        const labels = opts.mode === "completo"
-            ? ["Fechando o Discord", "Clonando o repositório", "Instalando dependências", "Compilando", "Aplicando o patch"]
-            : ["Fechando o Discord", "Baixando o Bycord", "Aplicando o patch", "Conferindo"];
-        let i = 0;
-        const timer = setInterval(() => {
-            i++;
-            const done = i > labels.length;
-            onProgress({
-                step: Math.min(i, labels.length), total: labels.length,
-                label: done ? "Pronto" : labels[i - 1],
-                log: done ? "Demonstração concluída. Nada foi alterado no seu PC." : `${labels[i - 1]}... (demonstração)`,
-                done,
-            });
-            if (done) clearInterval(timer);
-        }, 800);
-        return () => clearInterval(timer);
+        w.runtime.EventsOn("op:progress", onProgress);
+        if (kind === "install") void go.Install(opts);
+        else if (kind === "repair") void go.Repair(opts.branch);
+        else if (kind === "update") void go.Update(opts.branch);
+        else void go.Uninstall(opts.branch);
+        return () => w.runtime.EventsOff("op:progress");
     },
 };

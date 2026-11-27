@@ -1,32 +1,51 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { api, DiscordInstall, inWails, Mode, Progress, Requirement } from "./api";
+import { api, DiscordInstall, inWails, InstallOptions, Mode, OpKind, Progress, Requirement } from "./api";
 import byto from "./assets/images/byto.png";
 import bytoAcenando from "./assets/images/byto-acenando.png";
 import logo from "./assets/images/logo.png";
 
-type Screen = "boas-vindas" | "discord" | "modo" | "instalando" | "pronto" | "gerenciar";
+type Screen = "boas-vindas" | "discord" | "modo" | "operacao" | "pronto" | "gerenciar";
 
 const STEPS: { id: Screen; label: string; }[] = [
     { id: "boas-vindas", label: "Boas-vindas" },
     { id: "discord", label: "Escolher o Discord" },
     { id: "modo", label: "Modo de instalação" },
-    { id: "instalando", label: "Instalação" },
+    { id: "operacao", label: "Instalação" },
     { id: "pronto", label: "Pronto" },
 ];
 
 const REPO_URL = "https://github.com/barneybots/Bycord";
+
+const OP_TEXT: Record<OpKind, { running: string; done: string; }> = {
+    install: { running: "Instalando…", done: "Bycord instalado" },
+    repair: { running: "Reparando…", done: "Bycord reparado" },
+    update: { running: "Atualizando…", done: "Bycord atualizado" },
+    uninstall: { running: "Desinstalando…", done: "Bycord removido" },
+};
+
+interface Confirm {
+    title: string;
+    text: string;
+    action: string;
+    danger?: boolean;
+    onConfirm: () => void;
+}
 
 export default function App() {
     const [screen, setScreen] = useState<Screen>("boas-vindas");
     const [version, setVersion] = useState("");
     const [discords, setDiscords] = useState<DiscordInstall[] | null>(null);
     const [branch, setBranch] = useState("");
+    const [replaceOther, setReplaceOther] = useState(false);
     const [mode, setMode] = useState<Mode>("rapido");
     const [folder, setFolder] = useState("");
     const [reqs, setReqs] = useState<Requirement[] | null>(null);
+    const [op, setOp] = useState<OpKind>("install");
+    const [confirm, setConfirm] = useState<Confirm | null>(null);
 
     const selected = discords?.find(d => d.branch === branch);
+    const options: InstallOptions = { branch, mode, folder, replaceOther };
 
     const refresh = () => {
         setDiscords(null);
@@ -48,6 +67,27 @@ export default function App() {
     useEffect(() => {
         if (mode === "completo" && !reqs) api.checkRequirements().then(setReqs);
     }, [mode]);
+
+    const selectBranch = (b: string) => {
+        setBranch(b);
+        setReplaceOther(false);
+    };
+
+    // Antes de mexer no Discord, avisa se ele está aberto (vai ser fechado).
+    const startOp = async (kind: OpKind) => {
+        const go = () => { setConfirm(null); setOp(kind); setScreen("operacao"); };
+        const touchesDiscord = kind !== "update" && !(kind === "install" && mode === "completo");
+        if (touchesDiscord && selected && await api.isRunning(branch)) {
+            setConfirm({
+                title: `O ${selected.name} está aberto`,
+                text: "Ele vai ser fechado para continuar. Se estiver numa call, termine antes.",
+                action: "Fechar e continuar",
+                onConfirm: go,
+            });
+            return;
+        }
+        go();
+    };
 
     const stepIndex = STEPS.findIndex(s => s.id === (screen === "gerenciar" ? "discord" : screen));
 
@@ -78,7 +118,9 @@ export default function App() {
                         <ChooseDiscord
                             discords={discords}
                             branch={branch}
-                            onSelect={setBranch}
+                            onSelect={selectBranch}
+                            replaceOther={replaceOther}
+                            onReplaceOther={setReplaceOther}
                             onRefresh={refresh}
                             onBack={() => setScreen("boas-vindas")}
                             onNext={() => setScreen(selected?.state === "bycord" ? "gerenciar" : "modo")}
@@ -96,25 +138,43 @@ export default function App() {
                             onRecheck={() => { setReqs(null); api.checkRequirements().then(setReqs); }}
                             target={selected}
                             onBack={() => setScreen("discord")}
-                            onNext={() => setScreen("instalando")}
+                            onNext={() => startOp("install")}
                         />
                     )}
 
-                    {screen === "instalando" && (
-                        <Installing
-                            options={{ branch, mode, folder }}
+                    {screen === "operacao" && (
+                        <Operation
+                            key={op + branch}
+                            kind={op}
+                            options={options}
                             target={selected}
-                            onDone={() => setScreen("pronto")}
+                            onDone={() => { refresh(); setScreen("pronto"); }}
+                            onBack={() => { refresh(); setScreen(op === "install" ? "modo" : "gerenciar"); }}
                         />
                     )}
 
-                    {screen === "pronto" && <Done target={selected} mode={mode} />}
+                    {screen === "pronto" && <Done target={selected} kind={op} mode={mode} />}
 
                     {screen === "gerenciar" && selected && (
-                        <Manage target={selected} onBack={() => setScreen("discord")} onReinstall={() => setScreen("modo")} />
+                        <Manage
+                            target={selected}
+                            onBack={() => setScreen("discord")}
+                            onReinstall={() => setScreen("modo")}
+                            onRepair={() => startOp("repair")}
+                            onUpdate={() => startOp("update")}
+                            onUninstall={() => setConfirm({
+                                title: `Remover o Bycord do ${selected.name}?`,
+                                text: `O Discord volta ao original. Suas configurações ficam guardadas em %APPDATA%\\Bycord, caso queira voltar.`,
+                                action: "Desinstalar",
+                                danger: true,
+                                onConfirm: () => { setConfirm(null); void startOp("uninstall"); },
+                            })}
+                        />
                     )}
                 </main>
             </div>
+
+            {confirm && <ConfirmDialog {...confirm} onCancel={() => setConfirm(null)} />}
         </div>
     );
 }
@@ -133,6 +193,21 @@ function TitleBar() {
                 </button>
             </div>
         </header>
+    );
+}
+
+function ConfirmDialog({ title, text, action, danger, onConfirm, onCancel }: Confirm & { onCancel: () => void; }) {
+    return (
+        <div className="overlay" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+            <div className="dialog">
+                <h3 id="confirm-title">{title}</h3>
+                <p>{text}</p>
+                <div className="dialog-actions">
+                    <button className="btn ghost" onClick={onCancel} autoFocus>Cancelar</button>
+                    <button className={`btn ${danger ? "danger" : "primary"}`} onClick={onConfirm}>{action}</button>
+                </div>
+            </div>
+        </div>
     );
 }
 
@@ -176,10 +251,13 @@ function stateLabel(d: DiscordInstall) {
     return d.state === "other" ? `Com ${d.mod}` : STATE_LABEL[d.state];
 }
 
-function ChooseDiscord({ discords, branch, onSelect, onRefresh, onBack, onNext, selected }: {
-    discords: DiscordInstall[] | null; branch: string; onSelect: (b: string) => void; onRefresh: () => void;
+function ChooseDiscord({ discords, branch, onSelect, replaceOther, onReplaceOther, onRefresh, onBack, onNext, selected }: {
+    discords: DiscordInstall[] | null; branch: string; onSelect: (b: string) => void;
+    replaceOther: boolean; onReplaceOther: (v: boolean) => void; onRefresh: () => void;
     onBack: () => void; onNext: () => void; selected?: DiscordInstall;
 }) {
+    const blocked = !selected?.supported || selected.state === "broken" || (selected.state === "other" && !replaceOther);
+
     return (
         <section className="screen">
             <div className="screen-head">
@@ -219,11 +297,23 @@ function ChooseDiscord({ discords, branch, onSelect, onRefresh, onBack, onNext, 
             {selected?.state === "other" && (
                 <div className="notice warn">
                     <strong>Esse Discord já tem o {selected.mod}</strong>
-                    Só dá para ter um mod por Discord. Se continuar, o {selected.mod} será substituído pelo Bycord nele.
+                    Só dá para ter um mod por Discord. Para instalar o Bycord nele, o {selected.mod} sai deste Discord
+                    (os arquivos e configurações do {selected.mod} continuam no PC).
+                    <label className="check">
+                        <input type="checkbox" checked={replaceOther} onChange={e => onReplaceOther(e.target.checked)} />
+                        Sim, trocar o {selected.mod} pelo Bycord no {selected.name}
+                    </label>
                 </div>
             )}
 
-            <Footer onBack={onBack} onNext={onNext} nextDisabled={!selected?.supported}
+            {selected?.state === "broken" && (
+                <div className="notice warn">
+                    <strong>Essa instalação está com problema</strong>
+                    Não achei o app.asar do Discord. Reinstale o {selected.name} e procure de novo.
+                </div>
+            )}
+
+            <Footer onBack={onBack} onNext={onNext} nextDisabled={blocked}
                 nextLabel={selected?.state === "bycord" ? "Gerenciar" : "Continuar"} />
         </section>
     );
@@ -252,7 +342,7 @@ function ChooseMode({ mode, onMode, folder, onChooseFolder, reqs, onRecheck, tar
                     <span className="mode-meta">~1 MB · em %APPDATA%\Bycord</span>
                 </button>
                 <button className={`mode ${mode === "completo" ? "selected" : ""}`} aria-pressed={mode === "completo"} onClick={() => onMode("completo")}>
-                    <span className="pill">Para devs</span>
+                    <span className="pill">Para devs · em breve</span>
                     <span className="mode-title">Completo</span>
                     <span className="mode-text">Baixa o repositório inteiro e compila no seu PC. Dá para mexer no código e usar seus próprios plugins.</span>
                     <span className="mode-meta">~200 MB · precisa de Git, Node e pnpm</span>
@@ -297,79 +387,132 @@ function ChooseMode({ mode, onMode, folder, onChooseFolder, reqs, onRecheck, tar
     );
 }
 
-function Installing({ options, target, onDone }: {
-    options: { branch: string; mode: Mode; folder: string; }; target?: DiscordInstall; onDone: () => void;
+function Operation({ kind, options, target, onDone, onBack }: {
+    kind: OpKind; options: InstallOptions; target?: DiscordInstall; onDone: () => void; onBack: () => void;
 }) {
     const [progress, setProgress] = useState<Progress | null>(null);
     const [log, setLog] = useState<string[]>([]);
     const [showLog, setShowLog] = useState(false);
+    const [attempt, setAttempt] = useState(0);
     const logRef = useRef<HTMLPreElement>(null);
 
-    useEffect(() => api.install(options, p => {
-        setProgress(p);
-        setLog(l => [...l, p.log]);
-    }), []);
+    useEffect(() => {
+        setProgress(null);
+        setLog([]);
+        return api.run(kind, options, p => {
+            setProgress(p);
+            setLog(l => [...l, p.log]);
+        });
+    }, [attempt]);
+
+    useEffect(() => {
+        if (progress?.error) setShowLog(true);
+    }, [progress?.error]);
 
     useEffect(() => {
         logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
     }, [log, showLog]);
 
+    const failed = Boolean(progress?.error);
     const pct = progress ? Math.round((progress.done ? 1 : (progress.step - 1) / progress.total) * 100) : 0;
+    const demo = kind === "install" && options.mode === "completo";
 
     return (
         <section className="screen">
             <div className="screen-head">
                 <div>
-                    <h2>{progress?.done ? "Tudo certo" : "Instalando…"}</h2>
-                    <p className="sub">Bycord no {target?.name}, modo {options.mode === "rapido" ? "Rápido" : "Completo"}.</p>
+                    <h2>{failed ? "Algo deu errado" : progress?.done ? "Tudo certo" : OP_TEXT[kind].running}</h2>
+                    <p className="sub">
+                        {target?.name}
+                        {kind === "install" && `, modo ${options.mode === "rapido" ? "Rápido" : "Completo"}`}.
+                    </p>
                 </div>
             </div>
 
-            <div className="notice demo">
-                <strong>Demonstração</strong>
-                Esta versão do instalador só mostra as etapas. Nada é baixado e o Discord não é alterado.
-            </div>
+            {demo && (
+                <div className="notice demo">
+                    <strong>Demonstração</strong>
+                    O modo Completo ainda só mostra as etapas. Nada é baixado e o Discord não é alterado.
+                </div>
+            )}
 
-            <div className="progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
-                <div className="progress-bar" style={{ width: `${pct}%` }} />
-            </div>
-            <p className="progress-label">{progress?.label ?? "Preparando…"} <span className="sub">{pct}%</span></p>
+            {failed ? (
+                <div className="notice error">
+                    <strong>Parou em: {progress!.label}</strong>
+                    {progress!.error}
+                </div>
+            ) : (
+                <>
+                    <div className="progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+                        <div className="progress-bar" style={{ width: `${pct}%` }} />
+                    </div>
+                    <p className="progress-label">{progress?.label ?? "Preparando…"} <span className="sub">{pct}%</span></p>
+                </>
+            )}
 
             <button className="link" onClick={() => setShowLog(s => !s)}>{showLog ? "Esconder detalhes" : "Ver detalhes"}</button>
             {showLog && <pre className="log" ref={logRef}>{log.join("\n")}</pre>}
 
-            <Footer onNext={onDone} nextLabel="Continuar" nextDisabled={!progress?.done} />
+            {failed
+                ? (
+                    <footer className="actions">
+                        <button className="btn ghost" onClick={onBack}>Voltar</button>
+                        <button className="btn primary" onClick={() => setAttempt(a => a + 1)}>Tentar de novo</button>
+                    </footer>
+                )
+                : <Footer onNext={onDone} nextLabel="Continuar" nextDisabled={!progress?.done} />}
         </section>
     );
 }
 
-function Done({ target, mode }: { target?: DiscordInstall; mode: Mode; }) {
-    const tips = useMemo(() => [
-        "Abra as Configurações do Discord: a seção Bycord fica no menu da esquerda.",
-        mode === "rapido" ? "O Bycord se atualiza sozinho pelos releases do GitHub." : "Para atualizar, use o atualizador do Bycord: ele faz git pull e recompila.",
-        "Se o Discord atualizar e o Bycord sumir, abra este instalador e use Reparar.",
-    ], [mode]);
+function Done({ target, kind, mode }: { target?: DiscordInstall; kind: OpKind; mode: Mode; }) {
+    const [openError, setOpenError] = useState("");
+    const demo = kind === "install" && mode === "completo";
+
+    const tips = kind === "uninstall"
+        ? ["O Discord voltou ao original.", "Suas configurações do Bycord continuam em %APPDATA%\\Bycord, caso queira voltar."]
+        : kind === "update"
+            ? ["Reinicie o Discord para usar a versão nova."]
+            : [
+                "Abra as Configurações do Discord: a seção Bycord fica no menu da esquerda.",
+                "O Bycord se atualiza sozinho pelos releases do GitHub.",
+                "Se o Discord atualizar e o Bycord sumir, abra este instalador e use Reparar.",
+            ];
 
     return (
         <section className="screen done">
             <img src={bytoAcenando} alt="" className="done-byto" />
-            <h2>Bycord instalado no {target?.name}!</h2>
-            <p className="sub">(Na demonstração, nada foi alterado de verdade.)</p>
+            <h2>{OP_TEXT[kind].done}{kind === "uninstall" ? " do" : " no"} {target?.name}!</h2>
+            {demo && <p className="sub">(Demonstração: nada foi alterado de verdade.)</p>}
             <ul className="tips">{tips.map(t => <li key={t}>{t}</li>)}</ul>
+            {openError && <div className="notice error"><strong>Não consegui abrir o Discord</strong>{openError}</div>}
             <footer className="actions">
                 <button className="btn ghost" onClick={() => api.openURL(REPO_URL)}>Bycord no GitHub</button>
-                <button className="btn primary" onClick={() => api.quit()}>Fechar</button>
+                <div className="actions-right">
+                    <button className="btn ghost" onClick={() => api.quit()}>Fechar</button>
+                    {target && !demo && (
+                        <button className="btn primary" onClick={() => api.openDiscord(target.branch).then(err => {
+                            if (err) setOpenError(err);
+                            else api.quit();
+                        })}>
+                            Abrir o {target.name}
+                        </button>
+                    )}
+                </div>
             </footer>
         </section>
     );
 }
 
-function Manage({ target, onBack, onReinstall }: { target: DiscordInstall; onBack: () => void; onReinstall: () => void; }) {
+function Manage({ target, onBack, onReinstall, onRepair, onUpdate, onUninstall }: {
+    target: DiscordInstall; onBack: () => void; onReinstall: () => void;
+    onRepair: () => void; onUpdate: () => void; onUninstall: () => void;
+}) {
     const actions = [
-        { title: "Reparar", text: "Aplica o patch de novo. Use quando o Discord atualizar e o Bycord sumir.", soon: true },
-        { title: "Atualizar", text: "Baixa a versão mais nova do Bycord agora.", soon: true },
+        { title: "Reparar", text: "Aplica o patch de novo. Use quando o Discord atualizar e o Bycord sumir.", onClick: onRepair },
+        { title: "Atualizar", text: "Baixa a versão mais nova do Bycord agora.", onClick: onUpdate },
         { title: "Trocar de modo", text: "Muda entre Rápido e Completo.", onClick: onReinstall },
-        { title: "Desinstalar", text: "Devolve o Discord ao original. Suas configurações ficam guardadas.", soon: true, danger: true },
+        { title: "Desinstalar", text: "Devolve o Discord ao original. Suas configurações ficam guardadas.", onClick: onUninstall, danger: true },
     ];
 
     return (
@@ -377,17 +520,18 @@ function Manage({ target, onBack, onReinstall }: { target: DiscordInstall; onBac
             <div className="screen-head">
                 <div>
                     <h2>Gerenciar o Bycord</h2>
-                    <p className="sub">No {target.name}{target.modPath ? ` · ${target.modPath}` : ""}</p>
+                    <p className="sub">No {target.name}</p>
                 </div>
             </div>
             <div className="manage">
                 {actions.map(a => (
-                    <button key={a.title} className={`manage-card ${a.danger ? "danger" : ""}`} disabled={a.soon} onClick={a.onClick}>
-                        <span className="mode-title">{a.title}{a.soon && <span className="pill muted">em breve</span>}</span>
+                    <button key={a.title} className={`manage-card ${a.danger ? "danger" : ""}`} onClick={a.onClick}>
+                        <span className="mode-title">{a.title}</span>
                         <span className="mode-text">{a.text}</span>
                     </button>
                 ))}
             </div>
+            {target.modPath && <p className="hint">Carregando de <code>{target.modPath}</code></p>}
             <Footer onBack={onBack} />
         </section>
     );

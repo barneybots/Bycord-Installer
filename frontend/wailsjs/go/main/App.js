@@ -18,6 +18,10 @@ export function Install(arg1) {
   return window['go']['main']['App']['Install'](arg1);
 }
 
+export function IsRunning(arg1) {
+  return window['go']['main']['App']['IsRunning'](arg1);
+}
+
 export function ListDiscords() {
   return window['go']['main']['App']['ListDiscords']();
 }
@@ -26,12 +30,28 @@ export function Minimise() {
   return window['go']['main']['App']['Minimise']();
 }
 
+export function OpenDiscord(arg1) {
+  return window['go']['main']['App']['OpenDiscord'](arg1);
+}
+
 export function OpenURL(arg1) {
   return window['go']['main']['App']['OpenURL'](arg1);
 }
 
 export function Quit() {
   return window['go']['main']['App']['Quit']();
+}
+
+export function Repair(arg1) {
+  return window['go']['main']['App']['Repair'](arg1);
+}
+
+export function Uninstall(arg1) {
+  return window['go']['main']['App']['Uninstall'](arg1);
+}
+
+export function Update(arg1) {
+  return window['go']['main']['App']['Update'](arg1);
 }
 
 export function Version() {
