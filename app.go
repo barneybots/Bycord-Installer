@@ -13,7 +13,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-const AppVersion = "0.4.0"
+const AppVersion = "0.4.1"
 
 // App é o que a interface enxerga do Go.
 type App struct {

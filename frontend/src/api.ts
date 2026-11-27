@@ -156,7 +156,7 @@ function fakeOp(kind: OpKind, opts: InstallOptions, onProgress: (p: Progress) =>
 const NAME_RE = /^[A-Za-z][A-Za-z0-9]{1,39}$/;
 
 export const api = {
-    version: () => go ? go.Version() : Promise.resolve("0.4.0"),
+    version: () => go ? go.Version() : Promise.resolve("0.4.1"),
     listDiscords: () => go ? go.ListDiscords() : Promise.resolve(sample),
     checkRequirements: () => go ? go.CheckRequirements() : Promise.resolve<Requirement[]>([
         { name: "Git", found: true, version: "2.56.0", link: "https://git-scm.com/download/win", note: "" },
