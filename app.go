@@ -5,15 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-const AppVersion = "0.3.0"
+const AppVersion = "0.4.0"
 
 // App é o que a interface enxerga do Go.
 type App struct {
@@ -185,7 +185,7 @@ func patchSteps(inst DiscordInstall, patcher string) []step {
 	}
 }
 
-// Install instala o Bycord. O modo Completo ainda é só demonstração.
+// Install instala o Bycord. No modo Rápido baixa a build pronta; no Completo clona e compila o código.
 func (a *App) Install(opts InstallOptions) {
 	inst, err := findInstall(opts.Branch)
 	if err == nil && inst.State == "other" && !opts.ReplaceOther {
@@ -197,7 +197,14 @@ func (a *App) Install(opts InstallOptions) {
 	}
 
 	if opts.Mode == "completo" {
-		a.run(demoSteps(opts.Folder))
+		folder := filepath.Clean(opts.Folder)
+		if _, err := folderState(folder); err != nil {
+			a.run([]step{{"Preparando", func(func(string)) error { return err }}})
+			return
+		}
+		// Compila antes de fechar o Discord: ele só fecha quando o patch está para ser aplicado.
+		steps := append(a.sourceSteps(folder), closeStep(inst))
+		a.run(append(steps, patchSteps(inst, repoPatcher(folder))...))
 		return
 	}
 
@@ -215,6 +222,16 @@ func (a *App) Repair(branch string) {
 		a.run([]step{{"Preparando", func(func(string)) error { return err }}})
 		return
 	}
+	// No modo Completo, se a build sumiu, compila de novo antes de aplicar o patch.
+	if kind, repo := installKind(inst.ModPath); kind == "completo" {
+		var steps []step
+		if !isBycordPatcher(repoPatcher(repo)) {
+			steps = append(steps, installDepsStep(a.context(), repo), buildStep(a.context(), repo))
+		}
+		steps = append(steps, closeStep(inst))
+		a.run(append(steps, patchSteps(inst, repoPatcher(repo))...))
+		return
+	}
 	patcher := inst.ModPath
 	if patcher == "" || !exists(patcher) {
 		patcher = quickPatcherPath()
@@ -226,24 +243,127 @@ func (a *App) Repair(branch string) {
 	a.run(append(steps, patchSteps(inst, patcher)...))
 }
 
-// Update baixa a build mais nova do Bycord (modo Rápido).
-// Os arquivos ficam em %APPDATA%\Bycord\dist, que é o mesmo para todos os Discords com o Bycord no modo Rápido.
+// Update traz o Bycord mais novo. No modo Rápido baixa a build pronta para %APPDATA%\Bycord\dist
+// (a mesma para todos os Discords no modo Rápido); no Completo faz git pull e compila de novo.
 func (a *App) Update(branch string) {
 	inst, err := findInstall(branch)
 	if err == nil && inst.State != "bycord" {
 		err = errors.New("esse Discord não está com o Bycord")
 	}
-	if err == nil && !samePath(inst.ModPath, quickPatcherPath()) {
-		err = errors.New("esse Bycord foi instalado pelo modo Completo; atualize pelo atualizador dentro do Discord")
+	kind, repo := installKind(inst.ModPath)
+	if err == nil && kind == "" {
+		err = fmt.Errorf("não reconheci a instalação em %s; use Trocar de modo para instalar de novo", inst.ModPath)
 	}
 	if err != nil {
 		a.run([]step{{"Preparando", func(func(string)) error { return err }}})
 		return
 	}
-	a.run([]step{a.downloadStep(), {"Concluindo", func(log func(string)) error {
+	finish := step{"Concluindo", func(log func(string)) error {
 		log("Reinicie o Discord para usar a versão nova.")
 		return nil
+	}}
+	if kind == "completo" {
+		a.run(append(a.sourceSteps(repo), finish))
+		return
+	}
+	a.run([]step{a.downloadStep(), finish})
+}
+
+// Build compila de novo o código da pasta (modo Completo), por exemplo depois de mexer num plugin.
+func (a *App) Build(branch string) {
+	inst, err := findInstall(branch)
+	kind, repo := installKind(inst.ModPath)
+	if err == nil && kind != "completo" {
+		err = errors.New("só dá para compilar no modo Completo")
+	}
+	if err != nil {
+		a.run([]step{{"Preparando", func(func(string)) error { return err }}})
+		return
+	}
+	a.run([]step{buildStep(a.context(), repo), {"Concluindo", func(log func(string)) error {
+		log("Aperte Ctrl+R no Discord para carregar a build nova (plugin novo começa desligado).")
+		return nil
 	}}})
+}
+
+// UserPlugins lista os plugins da pessoa no código do Bycord desse Discord.
+func (a *App) UserPlugins(branch string) ([]UserPlugin, error) {
+	repo, err := repoOf(branch)
+	if err != nil {
+		return nil, err
+	}
+	return listUserPlugins(repo)
+}
+
+// CreateUserPlugin cria um plugin novo a partir do modelo e devolve o caminho do index.ts.
+func (a *App) CreateUserPlugin(branch, name, description, author string) (string, error) {
+	repo, err := repoOf(branch)
+	if err != nil {
+		return "", err
+	}
+	return createUserPlugin(repo, name, description, author)
+}
+
+// HasEditor diz se o VS Code (ou o Cursor) está instalado.
+func (a *App) HasEditor() bool { return findEditor() != "" }
+
+// OpenInEditor abre o código do Bycord no editor, com um arquivo já aberto se for passado.
+func (a *App) OpenInEditor(branch, file string) string {
+	repo, err := repoOf(branch)
+	if err != nil {
+		return err.Error()
+	}
+	editor := findEditor()
+	if editor == "" {
+		return "não achei o VS Code; instale em code.visualstudio.com"
+	}
+	args := []string{repo}
+	if file != "" && isInside(file, repo) {
+		args = append(args, "--goto", file)
+	}
+	cmd := exec.Command(editor, args...)
+	hideWindow(cmd)
+	if err := cmd.Start(); err != nil {
+		return err.Error()
+	}
+	go cmd.Wait()
+	return ""
+}
+
+// OpenFolder abre no Explorer uma pasta do código do Bycord desse Discord ("" = a raiz, "userplugins").
+func (a *App) OpenFolder(branch, which string) string {
+	repo, err := repoOf(branch)
+	if err != nil {
+		return err.Error()
+	}
+	dir := repo
+	if which == "userplugins" {
+		dir = userPluginsDir(repo)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return err.Error()
+		}
+	}
+	if err := exec.Command("explorer.exe", dir).Start(); err != nil {
+		return err.Error()
+	}
+	return ""
+}
+
+func repoOf(branch string) (string, error) {
+	inst, err := findInstall(branch)
+	if err != nil {
+		return "", err
+	}
+	kind, repo := installKind(inst.ModPath)
+	if inst.State != "bycord" || kind != "completo" {
+		return "", errors.New("esse Discord não está com o Bycord no modo Completo")
+	}
+	return repo, nil
+}
+
+func isInside(path, root string) bool {
+	rel, err := filepath.Rel(root, path)
+	return err == nil && !strings.HasPrefix(rel, "..") && !filepath.IsAbs(rel)
 }
 
 func samePath(a, b string) bool {
@@ -260,6 +380,7 @@ func (a *App) Uninstall(branch string) {
 		a.run([]step{{"Preparando", func(func(string)) error { return err }}})
 		return
 	}
+	_, repo := installKind(inst.ModPath)
 	a.run([]step{
 		closeStep(inst),
 		{"Removendo o patch", func(log func(string)) error {
@@ -279,23 +400,10 @@ func (a *App) Uninstall(branch string) {
 				return fmt.Errorf("o Discord ainda não ficou limpo (estado: %s)", state)
 			}
 			log("Suas configurações continuam em " + bycordDataDir())
+			if repo != "" {
+				log("O código continua em " + repo + ". Apague a pasta se não for mais usar.")
+			}
 			return nil
 		}},
 	})
-}
-
-func demoSteps(folder string) []step {
-	wait := func(line string) func(log func(string)) error {
-		return func(log func(string)) error {
-			log(line + " (demonstração)")
-			time.Sleep(800 * time.Millisecond)
-			return nil
-		}
-	}
-	return []step{
-		{"Clonando o repositório", wait("git clone https://github.com/barneybots/Bycord " + folder)},
-		{"Instalando dependências", wait("pnpm install")},
-		{"Compilando", wait("pnpm build")},
-		{"Aplicando o patch", wait("O modo Completo ainda não altera o Discord.")},
-	}
 }

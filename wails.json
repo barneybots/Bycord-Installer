@@ -13,7 +13,7 @@
   "info": {
     "companyName": "Bycord",
     "productName": "Bycord Installer",
-    "productVersion": "0.3.0",
+    "productVersion": "0.4.0",
     "copyright": "GPL-3.0-or-later. Partes baseadas no Vencord Installer.",
     "comments": "Instalador do Bycord, um client mod baseado no Vencord"
   }

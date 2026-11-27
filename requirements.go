@@ -3,6 +3,7 @@ package main
 import (
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -12,7 +13,11 @@ type Requirement struct {
 	Found   bool   `json:"found"`
 	Version string `json:"version"`
 	Link    string `json:"link"`
+	Note    string `json:"note"` // por que não serve (versão antiga), quando achou mas não dá
 }
+
+// minNode é a versão mínima do Node que o Bycord pede (engines do package.json).
+const minNode = 22
 
 var versionRe = regexp.MustCompile(`\d+\.\d+(\.\d+)?`)
 
@@ -33,6 +38,13 @@ func CheckRequirements() []Requirement {
 			if b, err := cmd.Output(); err == nil {
 				r.Found = true
 				r.Version = versionRe.FindString(strings.TrimSpace(string(b)))
+			}
+		}
+		if t.cmd == "node" && r.Found {
+			major, _ := strconv.Atoi(strings.SplitN(r.Version, ".", 2)[0])
+			if major < minNode {
+				r.Found = false
+				r.Note = "precisa da " + strconv.Itoa(minNode) + " ou mais nova"
 			}
 		}
 		out = append(out, r)

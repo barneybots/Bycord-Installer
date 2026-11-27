@@ -2,11 +2,11 @@ import { Trash, TriangleExclamationPoint } from "lucide-react";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 
-import { api, DiscordInstall, inWails, InstallOptions, Mode, OpKind, Requirement } from "./api";
-import { ChooseDiscord, ChooseMode, Done, Manage, Operation, Welcome } from "./screens";
+import { api, DiscordInstall, FolderCheck, inWails, InstallOptions, Mode, OpKind, Requirement } from "./api";
+import { ChooseDiscord, ChooseMode, Done, Manage, MyPlugins, Operation, Welcome } from "./screens";
 import { Background, CableStepper, Dialog, TitleBar } from "./ui";
 
-type Screen = "boas-vindas" | "discord" | "modo" | "operacao" | "pronto" | "gerenciar";
+type Screen = "boas-vindas" | "discord" | "modo" | "operacao" | "pronto" | "gerenciar" | "plugins";
 
 const ORDER: Screen[] = ["boas-vindas", "discord", "modo", "operacao", "pronto"];
 const STEP_LABELS = ["Início", "Discord", "Modo", "Instalação", "Pronto"];
@@ -19,17 +19,23 @@ interface Confirm {
     onConfirm: () => void;
 }
 
+// Só na prévia no navegador: ?tela=plugins abre direto numa tela, ?completo escolhe o modo Completo
+// e ?op=build mostra o fim de uma operação, para conferir o visual sem clicar em tudo.
+const preview = inWails ? null : new URLSearchParams(location.search);
+const previewScreen = (preview?.get("tela") ?? null) as Screen | null;
+
 export default function App() {
-    const [screen, setScreenRaw] = useState<Screen>("boas-vindas");
+    const [screen, setScreenRaw] = useState<Screen>(previewScreen ?? "boas-vindas");
     const [direction, setDirection] = useState(1);
     const [version, setVersion] = useState("");
     const [discords, setDiscords] = useState<DiscordInstall[] | null>(null);
-    const [branch, setBranch] = useState("");
+    const [branch, setBranch] = useState(previewScreen === "gerenciar" || previewScreen === "plugins" || preview?.has("op") ? "development" : "");
     const [replaceOther, setReplaceOther] = useState(false);
-    const [mode, setMode] = useState<Mode>("rapido");
+    const [mode, setMode] = useState<Mode>(preview?.has("completo") ? "completo" : "rapido");
     const [folder, setFolder] = useState("");
     const [reqs, setReqs] = useState<Requirement[] | null>(null);
-    const [op, setOp] = useState<OpKind>("install");
+    const [folderCheck, setFolderCheck] = useState<FolderCheck | null>(null);
+    const [op, setOp] = useState<OpKind>((preview?.get("op") as OpKind | null) ?? "install");
     const [confirm, setConfirm] = useState<Confirm | null>(null);
     const lastConfirm = useRef<Confirm | null>(null);
     if (confirm) lastConfirm.current = confirm;
@@ -37,7 +43,7 @@ export default function App() {
     const selected = discords?.find(d => d.branch === branch);
     const options: InstallOptions = { branch, mode, folder, replaceOther };
 
-    const position = (s: Screen) => s === "gerenciar" ? 1.5 : ORDER.indexOf(s);
+    const position = (s: Screen) => s === "gerenciar" ? 1.5 : s === "plugins" ? 1.6 : ORDER.indexOf(s);
     const setScreen = (next: Screen) => {
         setDirection(position(next) >= position(screen) ? 1 : -1);
         setScreenRaw(next);
@@ -64,10 +70,17 @@ export default function App() {
         if (mode === "completo" && !reqs) api.checkRequirements().then(setReqs);
     }, [mode]);
 
+    // Confere a pasta do código sempre que ela muda (ou ao voltar para a tela de modo).
+    useEffect(() => {
+        if (mode !== "completo" || screen !== "modo" || !folder) return;
+        setFolderCheck(null);
+        api.checkFolder(folder).then(setFolderCheck);
+    }, [mode, folder, screen]);
+
     // Antes de mexer no Discord, avisa se ele está aberto (vai ser fechado).
     const startOp = async (kind: OpKind) => {
         const go = () => { setConfirm(null); setOp(kind); setScreen("operacao"); };
-        const touchesDiscord = kind !== "update" && !(kind === "install" && mode === "completo");
+        const touchesDiscord = kind !== "update" && kind !== "build";
         if (touchesDiscord && selected && await api.isRunning(branch)) {
             setConfirm({
                 tone: "warn",
@@ -81,7 +94,7 @@ export default function App() {
         go();
     };
 
-    const stepIndex = screen === "gerenciar" ? 1 : ORDER.indexOf(screen);
+    const stepIndex = screen === "gerenciar" || screen === "plugins" ? 1 : ORDER.indexOf(screen);
     const shown = confirm ?? lastConfirm.current;
 
     return (
@@ -122,6 +135,7 @@ export default function App() {
                                     mode={mode}
                                     onMode={setMode}
                                     folder={folder}
+                                    folderCheck={folderCheck}
                                     onChooseFolder={() => api.chooseFolder().then(f => f && setFolder(f))}
                                     reqs={reqs}
                                     onRecheck={() => { setReqs(null); api.checkRequirements().then(setReqs); }}
@@ -137,19 +151,20 @@ export default function App() {
                                     options={options}
                                     target={selected}
                                     onDone={() => { refresh(); setScreen("pronto"); }}
-                                    onBack={() => { refresh(); setScreen(op === "install" ? "modo" : "gerenciar"); }}
+                                    onBack={() => { refresh(); setScreen(op === "install" ? "modo" : op === "build" ? "plugins" : "gerenciar"); }}
                                 />
                             )}
 
-                            {screen === "pronto" && <Done target={selected} kind={op} mode={mode} />}
+                            {screen === "pronto" && <Done target={selected} kind={op} mode={mode} folder={folder} onPlugins={() => setScreen("plugins")} />}
 
                             {screen === "gerenciar" && selected && (
                                 <Manage
                                     target={selected}
                                     onBack={() => setScreen("discord")}
-                                    onReinstall={() => setScreen("modo")}
+                                    onReinstall={() => { setMode(selected.install === "completo" ? "rapido" : "completo"); setScreen("modo"); }}
                                     onRepair={() => startOp("repair")}
                                     onUpdate={() => startOp("update")}
+                                    onPlugins={() => setScreen("plugins")}
                                     onUninstall={() => setConfirm({
                                         tone: "danger",
                                         title: `Remover o Bycord do ${selected.name}?`,
@@ -158,6 +173,10 @@ export default function App() {
                                         onConfirm: () => { setConfirm(null); void startOp("uninstall"); },
                                     })}
                                 />
+                            )}
+
+                            {screen === "plugins" && selected && (
+                                <MyPlugins target={selected} onBack={() => setScreen("gerenciar")} onBuild={() => startOp("build")} />
                             )}
                         </motion.div>
                     </AnimatePresence>

@@ -24,6 +24,8 @@ type DiscordInstall struct {
 	ModPath   string `json:"modPath"`   // caminho do patcher.js para onde o patch aponta
 	Supported bool   `json:"supported"` // false para o Phoenix
 	Icon      string `json:"icon"`      // ícone da própria instalação, em data URL ("" se não deu para ler)
+	Install   string `json:"install"`   // com o Bycord: rapido, completo ou "" (outro caminho)
+	Repo      string `json:"repo"`      // no modo completo, a pasta do código
 }
 
 var branches = []struct{ dir, branch, name string }{
@@ -48,6 +50,9 @@ func FindDiscords() []DiscordInstall {
 		}
 		inst := DiscordInstall{Branch: b.branch, Name: b.name, Path: root, Version: version, Supported: true}
 		inst.State, inst.Mod, inst.ModPath = patchState(filepath.Join(appDir, "resources"))
+		if inst.State == "bycord" {
+			inst.Install, inst.Repo = installKind(inst.ModPath)
+		}
 		found = append(found, inst)
 	}
 

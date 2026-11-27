@@ -1,11 +1,11 @@
 import {
-    ArrowLeft, CodeXml, ExternalLink, FolderOpen, Info, Lock, Power, RefreshCw, Repeat, ShieldCheck, Sparkles,
-    Terminal, Trash, Undo2, Wrench, Zap,
+    ArrowLeft, CircleAlert, CircleCheck, CodeXml, ExternalLink, FileCode, FolderCode, FolderOpen, Hammer, Info, Lock, Plus, Power,
+    Puzzle, RefreshCw, Repeat, ShieldCheck, Sparkles, Terminal, Trash, Undo2, Wrench, Zap,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 
-import { api, DiscordInstall, InstallOptions, Mode, OpKind, Progress, Requirement } from "./api";
+import { api, DiscordInstall, FolderCheck, InstallOptions, Mode, NAME_RE, OpKind, Progress, Requirement, UserPlugin } from "./api";
 import byto from "./assets/images/byto.png";
 import bytoAcenando from "./assets/images/byto-acenando.png";
 import { Badge, Button, Checkbox, Confetti, ProgressRing, softSpring, spring, StepList } from "./ui";
@@ -15,6 +15,8 @@ const REPO_URL = "https://github.com/barneybots/Bycord";
 /* Entrada em cascata para os itens de cada tela. */
 const list = { show: { transition: { staggerChildren: 0.05, delayChildren: 0.05 } } };
 const item = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: softSpring } };
+
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 function Actions({ children }: { children: React.ReactNode; }) {
     return <footer className="actions">{children}</footer>;
@@ -190,11 +192,11 @@ export function ChooseDiscord({ discords, branch, onSelect, replaceOther, onRepl
 
 /* ---------------- Modo ---------------- */
 
-export function ChooseMode({ mode, onMode, folder, onChooseFolder, reqs, onRecheck, target, onBack, onNext }: {
-    mode: Mode; onMode: (m: Mode) => void; folder: string; onChooseFolder: () => void;
+export function ChooseMode({ mode, onMode, folder, folderCheck, onChooseFolder, reqs, onRecheck, target, onBack, onNext }: {
+    mode: Mode; onMode: (m: Mode) => void; folder: string; folderCheck: FolderCheck | null; onChooseFolder: () => void;
     reqs: Requirement[] | null; onRecheck: () => void; target?: DiscordInstall; onBack: () => void; onNext: () => void;
 }) {
-    const missing = mode === "completo" && (!reqs || reqs.some(r => !r.found));
+    const blocked = mode === "completo" && (!reqs || reqs.some(r => !r.found) || !folderCheck || Boolean(folderCheck.error));
     const modes = [
         {
             id: "rapido" as Mode, icon: <Zap size={20} />, title: "Rápido", tag: "Recomendado",
@@ -202,9 +204,9 @@ export function ChooseMode({ mode, onMode, folder, onChooseFolder, reqs, onReche
             points: ["Não precisa de nada instalado", "Se atualiza sozinho", "~1 MB em %APPDATA%\\Bycord"],
         },
         {
-            id: "completo" as Mode, icon: <CodeXml size={20} />, title: "Completo", tag: "Em breve",
-            text: "Clona o repositório e compila no seu PC.",
-            points: ["Mexa no código e crie plugins", "Atualiza com git pull", "~200 MB, precisa de Git, Node e pnpm"],
+            id: "completo" as Mode, icon: <CodeXml size={20} />, title: "Completo", tag: "Para quem programa",
+            text: "Baixa o código e compila no seu PC.",
+            points: ["Crie seus próprios plugins", "Atualiza com git pull", "~500 MB, precisa de Git, Node 22+ e pnpm"],
         },
     ];
 
@@ -250,16 +252,30 @@ export function ChooseMode({ mode, onMode, folder, onChooseFolder, reqs, onReche
                         <div className="dev-inner">
                             <div className="field">
                                 <FolderOpen size={15} />
-                                <code>{folder}</code>
+                                <code title={folder}>{folder}</code>
                                 <button className="link" onClick={onChooseFolder}>Alterar</button>
                             </div>
+                            {folderCheck && (
+                                <p className={`folder-note ${folderCheck.error ? "bad" : ""}`}>
+                                    {folderCheck.error
+                                        ? <><CircleAlert size={13} /> {capitalize(folderCheck.error)}.</>
+                                        : folderCheck.state === "bycord"
+                                            ? <><CircleCheck size={13} /> Essa pasta já tem o código do Bycord: vou atualizar e usar ela.</>
+                                            : <><CircleCheck size={13} /> O código vai ser baixado nessa pasta.</>}
+                                </p>
+                            )}
                             <div className="tools">
                                 {!reqs && <span className="muted">Conferindo ferramentas…</span>}
                                 {reqs?.map(r => (
                                     <span key={r.name} className={`tool ${r.found ? "ok" : "missing"}`}>
                                         <span className="tool-dot" />
                                         {r.name}
-                                        {r.found ? <em>{r.version}</em> : <button className="link" onClick={() => api.openURL(r.link)}>baixar</button>}
+                                        {r.found
+                                            ? <em>{r.version}</em>
+                                            : <>
+                                                {r.note && <em>{r.version} · {r.note}</em>}
+                                                <button className="link" onClick={() => api.openURL(r.link)}>{r.note ? "atualizar" : "baixar"}</button>
+                                            </>}
                                     </span>
                                 ))}
                                 <button className="link" onClick={onRecheck}>conferir de novo</button>
@@ -271,7 +287,7 @@ export function ChooseMode({ mode, onMode, folder, onChooseFolder, reqs, onReche
 
             <Actions>
                 <Back onClick={onBack} />
-                <Button arrow onClick={onNext} disabled={missing}>Instalar</Button>
+                <Button arrow onClick={onNext} disabled={blocked}>Instalar</Button>
             </Actions>
         </motion.section>
     );
@@ -284,6 +300,7 @@ const OP_TITLE: Record<OpKind, string> = {
     repair: "Reparando o Bycord",
     update: "Atualizando o Bycord",
     uninstall: "Removendo o Bycord",
+    build: "Compilando o Bycord",
 };
 
 export function Operation({ kind, options, target, onDone, onBack }: {
@@ -317,19 +334,28 @@ export function Operation({ kind, options, target, onDone, onBack }: {
 
     const failed = Boolean(progress?.error);
     const value = progress ? (progress.done ? 1 : (progress.step - 0.5) / progress.total) : 0.02;
-    const demo = kind === "install" && options.mode === "completo";
+    // Clonar e compilar demora: avisa e deixa a última linha do log à vista.
+    const slow = (kind === "install" && options.mode === "completo") || (kind === "update" && target?.install === "completo") || kind === "build";
+    const lastLine = log[log.length - 1] ?? "";
 
     return (
         <motion.section className="screen" variants={list} initial="hidden" animate="show">
             <Heading
                 title={failed ? "Algo deu errado" : progress?.done ? "Tudo certo!" : OP_TITLE[kind]}
-                sub={<>{target?.name}{kind === "install" && <> · modo {options.mode === "rapido" ? "Rápido" : "Completo"}</>}{demo && <> · <span className="demo">demonstração</span></>}</>}
+                sub={<>
+                    {target?.name}
+                    {kind === "install" && <> · modo {options.mode === "rapido" ? "Rápido" : "Completo"}</>}
+                    {slow && !progress?.done && !failed && <> · pode levar alguns minutos</>}
+                </>}
             />
 
             <motion.div className="op" variants={item}>
                 <ProgressRing value={value} state={failed ? "error" : progress?.done ? "done" : "running"} />
                 <div className="op-side">
                     <StepList steps={progress?.steps ?? []} current={progress?.step ?? 0} done={Boolean(progress?.done)} failed={failed} />
+                    {slow && !showLog && !failed && !progress?.done && lastLine && (
+                        <p className="live-line mono" title={lastLine}>{lastLine}</p>
+                    )}
                     <AnimatePresence>
                         {failed && (
                             <motion.div className="callout danger" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
@@ -375,16 +401,19 @@ export function Operation({ kind, options, target, onDone, onBack }: {
 
 /* ---------------- Pronto ---------------- */
 
-export function Done({ target, kind, mode }: { target?: DiscordInstall; kind: OpKind; mode: Mode; }) {
+export function Done({ target, kind, mode, folder, onPlugins }: {
+    target?: DiscordInstall; kind: OpKind; mode: Mode; folder: string; onPlugins: () => void;
+}) {
     const [openError, setOpenError] = useState("");
-    const demo = kind === "install" && mode === "completo";
     const celebrate = kind !== "uninstall";
+    const completo = kind === "install" ? mode === "completo" : target?.install === "completo";
 
     const title = {
         install: "Bycord instalado!",
         repair: "Bycord reparado!",
         update: "Bycord atualizado!",
         uninstall: "Bycord removido",
+        build: "Build pronta!",
     }[kind];
 
     const tips = kind === "uninstall"
@@ -392,17 +421,28 @@ export function Done({ target, kind, mode }: { target?: DiscordInstall; kind: Op
             { icon: <Undo2 size={16} />, text: "O Discord voltou a ser o original." },
             { icon: <FolderOpen size={16} />, text: "Suas configurações ficam em %APPDATA%\\Bycord, caso volte." },
         ]
-        : kind === "update"
-            ? [{ icon: <Power size={16} />, text: "Reinicie o Discord para usar a versão nova." }]
-            : [
-                { icon: <Sparkles size={16} />, text: "Nas Configurações do Discord, procure a seção Bycord." },
-                { icon: <RefreshCw size={16} />, text: "Ele se atualiza sozinho pelo GitHub." },
-                { icon: <Wrench size={16} />, text: "Se o Discord atualizar e o Bycord sumir, use Reparar aqui." },
-            ];
+        : kind === "build"
+            ? [
+                { icon: <RefreshCw size={16} />, text: "Aperte Ctrl+R no Discord para carregar a build nova." },
+                { icon: <Puzzle size={16} />, text: "Plugin novo começa desligado: ligue na Central de Plugins, com o selo Seu." },
+            ]
+            : kind === "update"
+                ? [{ icon: <Power size={16} />, text: "Reinicie o Discord para usar a versão nova." }]
+                : completo
+                    ? [
+                        { icon: <FolderCode size={16} />, text: `O código ficou em ${folder || target?.repo || "sua pasta"}.` },
+                        { icon: <Puzzle size={16} />, text: "Crie seus plugins aqui em Gerenciar › Meus plugins." },
+                        { icon: <RefreshCw size={16} />, text: "Ele se atualiza com git pull, sozinho ou pelo Atualizar." },
+                    ]
+                    : [
+                        { icon: <Sparkles size={16} />, text: "Nas Configurações do Discord, procure a seção Bycord." },
+                        { icon: <RefreshCw size={16} />, text: "Ele se atualiza sozinho pelo GitHub." },
+                        { icon: <Wrench size={16} />, text: "Se o Discord atualizar e o Bycord sumir, use Reparar aqui." },
+                    ];
 
     return (
         <motion.section className="screen done" variants={list} initial="hidden" animate="show">
-            {celebrate && !demo && <Confetti />}
+            {celebrate && kind !== "build" && <Confetti />}
 
             <motion.div className="done-hero" variants={item}>
                 <motion.div className={`done-badge ${celebrate ? "" : "neutral"}`} initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ ...spring, delay: 0.05 }}>
@@ -417,7 +457,7 @@ export function Done({ target, kind, mode }: { target?: DiscordInstall; kind: Op
                         : <Undo2 size={34} />}
                 </motion.div>
                 <h2>{title}</h2>
-                <p className="sub">{kind === "uninstall" ? "do" : "no"} <b>{target?.name}</b>{demo && " · demonstração, nada foi alterado"}</p>
+                <p className="sub">{kind === "uninstall" ? "do" : "no"} <b>{target?.name}</b>{completo && kind !== "uninstall" && " · modo Completo"}</p>
             </motion.div>
 
             <motion.ul className={`tips tips-${tips.length}`} variants={list}>
@@ -444,8 +484,10 @@ export function Done({ target, kind, mode }: { target?: DiscordInstall; kind: Op
             <Actions>
                 <Button variant="subtle" icon={<ExternalLink size={15} />} onClick={() => api.openURL(REPO_URL)}>GitHub</Button>
                 <div className="actions-right">
-                    <Button variant="ghost" onClick={() => api.quit()}>Fechar</Button>
-                    {target && !demo && kind !== "uninstall" && (
+                    {kind === "build"
+                        ? <Button variant="ghost" icon={<Puzzle size={15} />} onClick={onPlugins}>Meus plugins</Button>
+                        : <Button variant="ghost" onClick={() => api.quit()}>Fechar</Button>}
+                    {target && kind !== "uninstall" && kind !== "build" && (
                         <Button arrow onClick={() => api.openDiscord(target.branch).then(err => err ? setOpenError(err) : api.quit())}>
                             Abrir o {target.name}
                         </Button>
@@ -458,16 +500,33 @@ export function Done({ target, kind, mode }: { target?: DiscordInstall; kind: Op
 
 /* ---------------- Gerenciar ---------------- */
 
-export function Manage({ target, onBack, onReinstall, onRepair, onUpdate, onUninstall }: {
+export function Manage({ target, onBack, onReinstall, onRepair, onUpdate, onUninstall, onPlugins }: {
     target: DiscordInstall; onBack: () => void; onReinstall: () => void;
-    onRepair: () => void; onUpdate: () => void; onUninstall: () => void;
+    onRepair: () => void; onUpdate: () => void; onUninstall: () => void; onPlugins: () => void;
 }) {
-    const actions = [
-        { icon: <Wrench size={18} />, title: "Reparar", text: "Aplica o patch de novo depois de uma atualização do Discord.", onClick: onRepair },
-        { icon: <RefreshCw size={18} />, title: "Atualizar", text: "Baixa agora a versão mais nova do Bycord.", onClick: onUpdate },
-        { icon: <Repeat size={18} />, title: "Trocar de modo", text: "Muda entre Rápido e Completo.", onClick: onReinstall },
-        { icon: <Trash size={18} />, title: "Desinstalar", text: "Devolve o Discord ao original.", onClick: onUninstall, danger: true },
-    ];
+    const completo = target.install === "completo";
+    const [openError, setOpenError] = useState("");
+
+    const openCode = async () => {
+        const err = await api.hasEditor() ? await api.openInEditor(target.branch) : await api.openFolder(target.branch);
+        setOpenError(err);
+    };
+
+    const actions = completo
+        ? [
+            { icon: <Puzzle size={18} />, title: "Meus plugins", text: "Crie e compile seus plugins.", onClick: onPlugins, accent: true },
+            { icon: <FolderCode size={18} />, title: "Abrir o código", text: "No VS Code, ou na pasta.", onClick: openCode },
+            { icon: <RefreshCw size={18} />, title: "Atualizar", text: "git pull e compila de novo.", onClick: onUpdate },
+            { icon: <Wrench size={18} />, title: "Reparar", text: "Aplica o patch de novo.", onClick: onRepair },
+            { icon: <Repeat size={18} />, title: "Trocar de modo", text: "Volta para o modo Rápido.", onClick: onReinstall },
+            { icon: <Trash size={18} />, title: "Desinstalar", text: "Devolve o Discord ao original.", onClick: onUninstall, danger: true },
+        ]
+        : [
+            { icon: <Wrench size={18} />, title: "Reparar", text: "Aplica o patch de novo depois de uma atualização do Discord.", onClick: onRepair },
+            { icon: <RefreshCw size={18} />, title: "Atualizar", text: "Baixa agora a versão mais nova do Bycord.", onClick: onUpdate },
+            { icon: <Repeat size={18} />, title: "Trocar de modo", text: "Muda para o Completo e crie seus plugins.", onClick: onReinstall },
+            { icon: <Trash size={18} />, title: "Desinstalar", text: "Devolve o Discord ao original.", onClick: onUninstall, danger: true },
+        ];
 
     return (
         <motion.section className="screen" variants={list} initial="hidden" animate="show">
@@ -476,14 +535,25 @@ export function Manage({ target, onBack, onReinstall, onRepair, onUpdate, onUnin
             <motion.div className="manage-head" variants={item}>
                 <BranchIcon install={target} />
                 <span className="card-main">
-                    <span className="card-title">{target.name} <Badge tone="accent">Com Bycord</Badge></span>
-                    <code className="card-sub mono">{target.modPath || target.path}</code>
+                    <span className="card-title">
+                        {target.name} <Badge tone="accent">Com Bycord</Badge>
+                        {target.install && <Badge>{completo ? "Completo" : "Rápido"}</Badge>}
+                    </span>
+                    <code className="card-sub mono" title={target.repo || target.modPath}>{target.repo || target.modPath || target.path}</code>
                 </span>
             </motion.div>
 
-            <motion.div className="manage" variants={list}>
+            {openError && <div className="callout danger"><div className="callout-inner"><strong>Não consegui abrir</strong><span>{openError}</span></div></div>}
+
+            <motion.div className={`manage ${completo ? "manage-6" : ""}`} variants={list}>
                 {actions.map(a => (
-                    <motion.button key={a.title} variants={item} className={`card action ${a.danger ? "danger" : ""}`} onClick={a.onClick} whileHover={{ y: -2 }}>
+                    <motion.button
+                        key={a.title}
+                        variants={item}
+                        className={`card action ${"danger" in a && a.danger ? "danger" : ""} ${"accent" in a && a.accent ? "accent" : ""}`}
+                        onClick={a.onClick}
+                        whileHover={{ y: -2 }}
+                    >
                         <span className="mode-icon">{a.icon}</span>
                         <span className="card-main">
                             <span className="card-title">{a.title}</span>
@@ -496,6 +566,153 @@ export function Manage({ target, onBack, onReinstall, onRepair, onUpdate, onUnin
             <Actions>
                 <Back onClick={onBack} />
                 <span />
+            </Actions>
+        </motion.section>
+    );
+}
+
+/* ---------------- Meus plugins (modo Completo) ---------------- */
+
+export function MyPlugins({ target, onBack, onBuild }: { target: DiscordInstall; onBack: () => void; onBuild: () => void; }) {
+    const [plugins, setPlugins] = useState<UserPlugin[] | null>(null);
+    const [editor, setEditor] = useState(false);
+    const [name, setName] = useState("");
+    const [description, setDescription] = useState("");
+    const [author, setAuthor] = useState(() => localStorage.getItem("bycord-author") ?? "");
+    const [error, setError] = useState("");
+    const [created, setCreated] = useState<{ name: string; file: string; } | null>(null);
+    const [busy, setBusy] = useState(false);
+
+    const load = () => api.userPlugins(target.branch)
+        .then(setPlugins)
+        .catch(e => { setPlugins([]); setError(String(e)); });
+
+    useEffect(() => {
+        void load();
+        api.hasEditor().then(setEditor);
+    }, []);
+
+    const nameOk = NAME_RE.test(name);
+    const nameBad = name.length > 0 && !nameOk;
+
+    const create = async () => {
+        if (!nameOk || busy) return;
+        setBusy(true);
+        setError("");
+        try {
+            const file = await api.createUserPlugin(target.branch, name, description, author);
+            localStorage.setItem("bycord-author", author);
+            setCreated({ name, file });
+            setName("");
+            setDescription("");
+            await load();
+            if (editor) void api.openInEditor(target.branch, file);
+        } catch (e) {
+            setError(capitalize(String(e)));
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const openPlugin = async (path: string) => {
+        const err = editor ? await api.openInEditor(target.branch, path) : await api.openFolder(target.branch, "userplugins");
+        if (err) setError(capitalize(err));
+    };
+
+    return (
+        <motion.section className="screen" variants={list} initial="hidden" animate="show">
+            <Heading
+                title="Meus plugins"
+                sub={<>Ficam em <code className="inline-code">src/userplugins</code>: atualizar o Bycord nunca mexe neles.</>}
+                aside={
+                    <button className="icon-btn" onClick={() => api.openFolder(target.branch, "userplugins")} aria-label="Abrir a pasta" title="Abrir a pasta dos plugins">
+                        <FolderOpen size={16} />
+                    </button>
+                }
+            />
+
+            <motion.div className="plugins-grid" variants={item}>
+                <div className="plugin-list">
+                    {plugins === null && <span className="muted">Procurando…</span>}
+                    {plugins?.length === 0 && (
+                        <div className="empty">
+                            <strong>Nenhum plugin ainda</strong>
+                            Crie o primeiro ao lado: ele já vem com uma opção, um comando /barra e um aviso ao ligar.
+                        </div>
+                    )}
+                    <AnimatePresence initial={false}>
+                        {plugins?.map(p => (
+                            <motion.button
+                                key={p.folder}
+                                layout
+                                initial={{ opacity: 0, y: 6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className={`card plugin-row ${created?.name === p.name ? "fresh" : ""}`}
+                                onClick={() => openPlugin(p.path)}
+                                title={editor ? "Abrir no VS Code" : "Abrir a pasta"}
+                            >
+                                <span className="mode-icon"><FileCode size={16} /></span>
+                                <span className="card-main">
+                                    <span className="card-title">{p.name}</span>
+                                    <code className="card-sub mono">userplugins/{p.folder}</code>
+                                </span>
+                                <ExternalLink size={14} className="row-go" />
+                            </motion.button>
+                        ))}
+                    </AnimatePresence>
+                </div>
+
+                <form className="new-plugin" onSubmit={e => { e.preventDefault(); void create(); }}>
+                    <strong className="new-title"><Plus size={15} /> Novo plugin</strong>
+                    <label className="input-label">
+                        Nome
+                        <input
+                            className={`input ${nameBad ? "bad" : ""}`}
+                            value={name}
+                            onChange={e => setName(e.target.value.replace(/\s/g, ""))}
+                            placeholder="MeuPlugin"
+                            maxLength={40}
+                            spellCheck={false}
+                            autoFocus
+                        />
+                        <span className={`input-hint ${nameBad ? "bad" : ""}`}>Letras e números, sem espaços.</span>
+                    </label>
+                    <label className="input-label">
+                        Descrição
+                        <input className="input" value={description} onChange={e => setDescription(e.target.value)} placeholder="O que ele faz" maxLength={140} />
+                    </label>
+                    <label className="input-label">
+                        Autor
+                        <input className="input" value={author} onChange={e => setAuthor(e.target.value)} placeholder="Seu nome" maxLength={40} />
+                    </label>
+                    <Button type="submit" icon={<Plus size={15} />} disabled={!nameOk || busy}>Criar plugin</Button>
+                </form>
+            </motion.div>
+
+            <AnimatePresence initial={false}>
+                {error && (
+                    <motion.div key="err" className="callout danger" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
+                        <div className="callout-inner"><span className="selectable">{error}</span></div>
+                    </motion.div>
+                )}
+                {created && !error && (
+                    <motion.div key="ok" className="callout ok" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
+                        <div className="callout-inner">
+                            <strong>{created.name} criado</strong>
+                            <span>
+                                {editor ? "Abri o arquivo no VS Code. " : ""}Edite o <code className="inline-code">index.ts</code>, clique em Compilar e aperte Ctrl+R no Discord.
+                            </span>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            <Actions>
+                <Back onClick={onBack} />
+                <div className="actions-right">
+                    <span className="actions-hint">Mexeu num plugin? Compile para ele entrar no Discord.</span>
+                    <Button icon={<Hammer size={15} />} onClick={onBuild} disabled={!plugins?.length}>Compilar</Button>
+                </div>
             </Actions>
         </motion.section>
     );
