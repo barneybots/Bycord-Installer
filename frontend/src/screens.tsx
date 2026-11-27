@@ -6,8 +6,8 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 
 import { api, DiscordInstall, FolderCheck, InstallOptions, Mode, NAME_RE, OpKind, Progress, Requirement, UserPlugin } from "./api";
-import byto from "./assets/images/byto.png";
-import bytoAcenando from "./assets/images/byto-acenando.png";
+import byto from "./assets/images/byto-acenando.webp";
+import bytoTrofeu from "./assets/images/byto-trofeu.webp";
 import { Badge, Button, Checkbox, Confetti, ProgressRing, softSpring, spring, StepList } from "./ui";
 
 const REPO_URL = "https://github.com/barneybots/Bycord";
@@ -472,7 +472,7 @@ export function Done({ target, kind, mode, folder, onPlugins }: {
 
             {celebrate && (
                 <motion.img
-                    src={bytoAcenando}
+                    src={bytoTrofeu}
                     alt=""
                     className="done-byto"
                     initial={{ y: 120, rotate: 12, opacity: 0 }}

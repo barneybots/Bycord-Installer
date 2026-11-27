@@ -146,8 +146,8 @@ export function ProgressRing({ value, state }: { value: number; state: "running"
             <svg viewBox="0 0 150 150" width="150" height="150">
                 <defs>
                     <linearGradient id="ring-grad" x1="0" y1="0" x2="1" y2="1">
-                        <stop offset="0%" stopColor="#d9f99d" />
-                        <stop offset="100%" stopColor="#84cc16" />
+                        <stop offset="0%" stopColor="#ddd6fe" />
+                        <stop offset="100%" stopColor="#7c3aed" />
                     </linearGradient>
                 </defs>
                 <circle cx="75" cy="75" r={r} className="ring-track" />
@@ -224,7 +224,7 @@ export function Confetti() {
             x: Math.cos(angle) * dist,
             y: Math.sin(angle) * dist * 0.7 - 40,
             rotate: Math.random() * 540 - 270,
-            color: ["#a3e635", "#d9f99d", "#fafafa", "#84cc16", "#52525b"][i % 5],
+            color: ["#8b5cf6", "#ddd6fe", "#fafafa", "#a78bfa", "#52525b"][i % 5],
             w: 4 + Math.random() * 5,
             delay: Math.random() * 0.12,
         };
